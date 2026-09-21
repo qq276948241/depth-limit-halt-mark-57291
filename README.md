@@ -124,7 +124,7 @@ try {
     qs.parse('a[b][c][d][e][f][g][h][i]=j', { depth: 1, strictDepth: true });
 } catch (err) {
     assert(err instanceof RangeError);
-    assert.strictEqual(err.message, 'Input depth exceeded depth option of 1 and strictDepth is true');
+    assert.strictEqual(err.message, 'Input depth exceeded depth option of 1 and strictDepth is true; parsing halted at depth level 2');
 }
 ```
 
