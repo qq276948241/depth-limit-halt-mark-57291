@@ -2232,3 +2232,99 @@ test('mixed array and object notation', function (t) {
 
     t.end();
 });
+
+test('strictPercentEncoding', function (t) {
+    t.deepEqual(qs.parse('a=%E4%B8%AD&b=2', { strictPercentEncoding: true }), { a: '中', b: '2' }, 'valid escapes decode');
+
+    t['throws'](
+        function () { qs.parse('a=%zz&b=2', { strictPercentEncoding: true }); },
+        URIError,
+        'non-hex digits fail the whole parse'
+    );
+
+    t['throws'](
+        function () { qs.parse('a=100%25&b=%E4&c=3', { strictPercentEncoding: true }); },
+        /position 0/,
+        'a truncated multibyte escape reports its position inside the value'
+    );
+
+    t['throws'](
+        function () { qs.parse('a=100%&b=2', { strictPercentEncoding: true }); },
+        /Incomplete percent-encoded sequence at position 3/,
+        'a dangling percent reports its position'
+    );
+
+    t['throws'](
+        function () { qs.parse('a=%4%20&b=2', { strictPercentEncoding: true }); },
+        /Invalid percent-encoded sequence at position 0/,
+        'a percent without two following digits fails'
+    );
+
+    t.deepEqual(qs.parse('a=%zz&b=2'), { a: '%zz', b: '2' }, 'default behavior stays lenient');
+
+    t.end();
+});
+
+test('plusAsSpace', function (t) {
+    t.deepEqual(qs.parse('a=b+c'), { a: 'b c' }, 'plus decodes to a space by default');
+    t.deepEqual(qs.parse('a=b+c', { plusAsSpace: true }), { a: 'b c' }, 'plusAsSpace true decodes plus to space');
+    t.deepEqual(qs.parse('a=b+c', { plusAsSpace: false }), { a: 'b+c' }, 'plusAsSpace false keeps a literal plus');
+    t.deepEqual(qs.parse('a=b%2Bc', { plusAsSpace: false }), { a: 'b+c' }, 'an escaped plus still decodes');
+
+    t['throws'](
+        function () { qs.parse('a=b+c', { plusAsSpace: 'nope' }); },
+        TypeError,
+        'plusAsSpace must be a boolean'
+    );
+
+    t.end();
+});
+
+test('strictBrackets', function (t) {
+    t.deepEqual(qs.parse('a[b][c]=1', { strictBrackets: true }), { a: { b: { c: '1' } } }, 'balanced brackets nest normally');
+    t.deepEqual(qs.parse('a[]=1&a[]=2', { strictBrackets: true }), { a: ['1', '2'] }, 'append brackets still collect into a list');
+
+    t['throws'](
+        function () { qs.parse('a[b=1', { strictBrackets: true }); },
+        /missing "\]"/,
+        'an unclosed bracket reports the missing close'
+    );
+
+    t['throws'](
+        function () { qs.parse('a[b[c]=1', { strictBrackets: true }); },
+        /missing "\]"/,
+        'a nested unclosed bracket reports the missing close'
+    );
+
+    t['throws'](
+        function () { qs.parse('a]b=1', { strictBrackets: true }); },
+        /missing "\["/,
+        'a stray close reports the missing open'
+    );
+
+    t.deepEqual(qs.parse('a[b=1'), { a: { '[b': '1' } }, 'default behavior keeps the lenient literal segment');
+
+    t['throws'](
+        function () { qs.parse('a[b=1', { strictBrackets: 'yes' }); },
+        TypeError,
+        'strictBrackets must be a boolean'
+    );
+
+    t.end();
+});
+
+test('strictDepth names the exceeded level', function (t) {
+    t['throws'](
+        function () { qs.parse('a[b][c][d][e][f][g]=1', { depth: 5, strictDepth: true }); },
+        /stopped at level 7/,
+        'the error reports the nesting level it stopped at'
+    );
+
+    t.deepEqual(
+        qs.parse('a[b][c][d][e][f]=1', { depth: 5, strictDepth: true }),
+        { a: { b: { c: { d: { e: { f: '1' } } } } } },
+        'input exactly at the depth limit parses'
+    );
+
+    t.end();
+});

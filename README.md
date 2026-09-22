@@ -124,11 +124,74 @@ try {
     qs.parse('a[b][c][d][e][f][g][h][i]=j', { depth: 1, strictDepth: true });
 } catch (err) {
     assert(err instanceof RangeError);
-    assert.strictEqual(err.message, 'Input depth exceeded depth option of 1 and strictDepth is true');
+    assert.strictEqual(err.message, 'Input depth exceeded depth option of 1 and strictDepth is true (stopped at level 9)');
 }
 ```
 
 The depth limit helps mitigate abuse when **qs** is used to parse user input, and it is recommended to keep it a reasonably small number. The strictDepth option adds a layer of protection by throwing an error when the limit is exceeded, allowing you to catch and handle such cases.
+
+When `strictDepth` throws, the error message names the nesting level it stopped at:
+
+```javascript
+try {
+    qs.parse('a[b][c][d][e][f][g]=j', { depth: 5, strictDepth: true });
+} catch (err) {
+    assert(err instanceof RangeError);
+    assert.strictEqual(err.message, 'Input depth exceeded depth option of 5 and strictDepth is true (stopped at level 7)');
+}
+```
+
+### Strict bracket pairing
+
+By default, keys with unbalanced brackets are parsed leniently and the unmatched part is kept as a literal segment. Pass `strictBrackets: true` to fail the whole parse instead; the error says which side is missing, and an unpaired bracket never becomes a key:
+
+```javascript
+qs.parse('a[b=1'); // { a: { '[b': '1' } }
+
+try {
+    qs.parse('a[b=1', { strictBrackets: true });
+} catch (err) {
+    assert(err instanceof SyntaxError);
+    assert.strictEqual(err.message, 'Unbalanced brackets in key "a[b": missing "]"');
+}
+
+try {
+    qs.parse('a]b=1', { strictBrackets: true });
+} catch (err) {
+    assert.strictEqual(err.message, 'Unbalanced brackets in key "a]b": missing "["');
+}
+```
+
+### Strict percent encoding
+
+Malformed percent escapes are left in place by default. Pass `strictPercentEncoding: true` to fail the whole parse; the error reports the position of the bad escape, so later keys are never silently dropped:
+
+```javascript
+qs.parse('a=%zz&b=2'); // { a: '%zz', b: '2' }
+
+try {
+    qs.parse('a=%zz&b=2', { strictPercentEncoding: true });
+} catch (err) {
+    assert(err instanceof URIError);
+    assert.strictEqual(err.message, 'Invalid percent-encoded sequence at position 0');
+}
+
+try {
+    qs.parse('a=100%&b=2', { strictPercentEncoding: true });
+} catch (err) {
+    assert.strictEqual(err.message, 'Incomplete percent-encoded sequence at position 3');
+}
+```
+
+### Plus signs
+
+By default `+` decodes to a space. Pass `plusAsSpace: false` to keep it as a literal plus for the whole parse; an escaped `%2B` still decodes to `+`:
+
+```javascript
+qs.parse('a=b+c'); // { a: 'b c' }
+qs.parse('a=b+c', { plusAsSpace: false }); // { a: 'b+c' }
+qs.parse('a=b%2Bc', { plusAsSpace: false }); // { a: 'b+c' }
+```
 
 For similar reasons, by default **qs** will only parse up to 1000 parameters. This can be overridden by passing a `parameterLimit` option:
 
